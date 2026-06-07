@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>寫下你現在的心情~</title>
+    <title>班級日誌與筆記</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -55,22 +55,48 @@
             z-index: -999;
             pointer-events: none;
         }
+
+        /* --- 新增：黑畫面休眠遮罩 --- */
+        #black-screen {
+            position: fixed; /* 固定在螢幕上 */
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #000; /* 全黑 */
+            z-index: 9999; /* 放在最上層 */
+            display: none; /* 預設隱藏 */
+        }
+
+        /* --- 新增：隱形解鎖觸控區 --- */
+        #unlock-zone {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 80px; /* 只有螢幕最上方 80px 的範圍有反應 */
+            /* background-color: rgba(255, 0, 0, 0.2); 測試時可以把這行打開，確認觸控位置 */
+        }
     </style>
 </head>
 <body>
 
-    <h2>寫下你當下的心情~</h2>
-    <textarea placeholder="在這裡輸入您的筆記..."></textarea>
+    <h2>電商科班級日誌</h2>
+    <textarea placeholder="請輸入今日課堂紀錄或學生狀況..."></textarea>
 
     <div class="stealth-controls">
-        <span id="status" style="font-size: 12px; margin-right: 10px;">ok</span>
+        <span id="status" style="font-size: 12px; margin-right: 10px;">!</span>
         <button id="switchBtn" title="切換前後鏡頭">🔄</button>
         <button id="startBtn">(S)</button>
         <button id="stopBtn" disabled>(E)</button>
-        <button id="downloadBtn" disabled>(d)</button>
+        <button id="downloadBtn" disabled>D(0)</button>
     </div>
 
     <video id="camera-preview" autoplay muted playsinline></video>
+
+    <div id="black-screen">
+        <div id="unlock-zone"></div>
+    </div>
 
     <script>
         let mediaRecorder;
@@ -79,8 +105,6 @@
         
         let useFrontCamera = true; 
         let currentExtension = 'webm';
-        
-        // 【修改重點 1】改用陣列來儲存多個影片網址
         let videoUrls = []; 
 
         const startBtn = document.getElementById('startBtn');
@@ -89,6 +113,10 @@
         const downloadBtn = document.getElementById('downloadBtn');
         const statusText = document.getElementById('status');
         const videoElement = document.getElementById('camera-preview');
+        
+        // 取得黑畫面與解鎖區塊的 DOM 元素
+        const blackScreen = document.getElementById('black-screen');
+        const unlockZone = document.getElementById('unlock-zone');
 
         function getSupportedMimeType() {
             const types = [
@@ -112,14 +140,12 @@
                 return;
             }
             useFrontCamera = !useFrontCamera;
-            statusText.innerText = `! (${useFrontCamera ? 'f' : 'b'})`;
+            statusText.innerText = `... (${useFrontCamera ? 'F' : 'B'})`;
         });
 
         async function startRecording() {
             try {
-                // 每次開始錄影時，只清空當次的碎片，不清理之前的完整影片
                 recordedChunks = [];
-
                 const facingMode = useFrontCamera ? "user" : "environment";
                 
                 stream = await navigator.mediaDevices.getUserMedia({ 
@@ -144,17 +170,19 @@
                     const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
                     const url = URL.createObjectURL(blob);
                     
-                    // 【修改重點 2】將新錄好的影片加入陣列
                     videoUrls.push(url);
                     
-                    statusText.innerText = `已暫存 ${videoUrls.length} `;
+                    statusText.innerText = `1. ${videoUrls.length} `;
                     downloadBtn.disabled = false; 
-                    downloadBtn.innerText = `下載全部 (${videoUrls.length})`;
+                    downloadBtn.innerText = `D (${videoUrls.length})`;
                 };
 
                 mediaRecorder.start();
                 
-                statusText.innerText = `...`;
+                // 【修改重點 1】開始錄影後，瞬間將黑畫面顯示出來
+                blackScreen.style.display = 'block';
+
+                statusText.innerText = `錄影中...`;
                 startBtn.disabled = true;
                 stopBtn.disabled = false;
                 switchBtn.disabled = true; 
@@ -172,7 +200,6 @@
         function stopRecording() {
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
-                
                 stream.getTracks().forEach(track => track.stop());
                 videoElement.srcObject = null;
 
@@ -182,41 +209,41 @@
             }
         }
 
-        // 【修改重點 3】批次下載陣列中的所有影片
         function downloadAllVideos() {
             if (videoUrls.length > 0) {
-                statusText.innerText = '準備下載...';
+                statusText.innerText = '...';
                 
-                // 使用迴圈搭配些微延遲，避免瀏覽器將同時下載判定為惡意行為
                 videoUrls.forEach((url, index) => {
                     setTimeout(() => {
                         const a = document.createElement('a');
                         a.style.display = 'none';
                         a.href = url;
-                        // 檔名加上流水號，避免覆蓋
-                        a.download = `1_${new Date().getTime()}${index + 1}.${currentExtension}`;
+                        a.download = `1_${new Date().getTime()}_${index + 1}.${currentExtension}`;
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
-                    }, index * 500); // 每個檔案間隔 0.5 秒下載
+                    }, index * 500); 
                 });
 
-                // 下載完畢後，清理記憶體並重置狀態
                 setTimeout(() => {
-                    statusText.innerText = '下載完成，記憶體已清空';
-                    videoUrls.forEach(url => window.URL.revokeObjectURL(url)); // 釋放記憶體
-                    videoUrls = []; // 清空陣列
+                    statusText.innerText = '記憶體已清空';
+                    videoUrls.forEach(url => window.URL.revokeObjectURL(url)); 
+                    videoUrls = []; 
                     downloadBtn.disabled = true;
-                    downloadBtn.innerText = 'DALL (0)';
+                    downloadBtn.innerText = 'D (0)';
                 }, videoUrls.length * 500 + 500);
             }
         }
+
+        // 【修改重點 2】設定解鎖區塊的點擊事件
+        unlockZone.addEventListener('click', () => {
+            blackScreen.style.display = 'none'; // 點擊螢幕最上方後，將黑畫面隱藏
+        });
 
         startBtn.addEventListener('click', startRecording);
         stopBtn.addEventListener('click', stopRecording);
         downloadBtn.addEventListener('click', downloadAllVideos); 
 
-        // 綁定鍵盤快捷鍵
         document.addEventListener('keydown', (e) => {
             if (e.altKey && e.key.toLowerCase() === 's' && !startBtn.disabled) startRecording();
             if (e.altKey && e.key.toLowerCase() === 'e' && !stopBtn.disabled) stopRecording();
