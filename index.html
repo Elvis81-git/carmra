@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人筆記本</title>
+    <title>notebook</title>
     <style>
-        /* 基礎偽裝介面樣式 */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f9f9f9;
@@ -26,16 +25,15 @@
             box-sizing: border-box;
         }
 
-        /* 偽裝按鈕（做得很不起眼，或者可以用鍵盤快速鍵觸發） */
         .stealth-controls {
             margin-top: 10px;
             text-align: right;
-            opacity: 0.3; /* 降低透明度讓它不顯眼 */
+            opacity: 0.3; 
             transition: opacity 0.3s;
         }
         
         .stealth-controls:hover {
-            opacity: 1; /* 滑鼠移過去才變清晰 */
+            opacity: 1; 
         }
 
         button {
@@ -46,9 +44,10 @@
             cursor: pointer;
             margin-left: 5px;
             color: #555;
+            font-size: 14px;
         }
 
-        /* 關鍵：將相機畫面縮小並移出視線，但不可設定 display: none */
+        /* 隱藏的相機畫面 */
         #camera-preview {
             position: absolute;
             width: 1px;
@@ -61,11 +60,12 @@
 </head>
 <body>
 
-    <h2>會議記錄</h2>
+    <h2>簡單紀錄當下</h2>
     <textarea placeholder="在這裡輸入您的筆記..."></textarea>
 
     <div class="stealth-controls">
-        <span id="status" style="font-size: 12px; margin-right: 10px;">準備就緒</span>
+        <span id="status" style="font-size: 12px; margin-right: 10px;">準備就緒 (前鏡頭)</span>
+        <button id="switchBtn" title="切換前後鏡頭">🔄 轉</button>
         <button id="startBtn">開始 (S)</button>
         <button id="stopBtn" disabled>停止 (E)</button>
     </div>
@@ -76,94 +76,118 @@
         let mediaRecorder;
         let recordedChunks = [];
         let stream;
+        
+        // 預設使用前鏡頭 (user 為前鏡頭，environment 為後鏡頭)
+        let useFrontCamera = true; 
+        let currentExtension = 'webm'; // 預設副檔名
 
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
+        const switchBtn = document.getElementById('switchBtn');
         const statusText = document.getElementById('status');
         const videoElement = document.getElementById('camera-preview');
 
-        // 開始錄影的非同步函數
+        // 自動偵測瀏覽器支援的最佳影片格式
+        function getSupportedMimeType() {
+            const types = [
+                'video/mp4', // iOS Safari 偏好格式
+                'video/webm;codecs=vp9,opus', // 現代 Chrome/Android
+                'video/webm;codecs=vp8,opus',
+                'video/webm'
+            ];
+            for (let type of types) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    currentExtension = type.includes('mp4') ? 'mp4' : 'webm';
+                    return type;
+                }
+            }
+            return ''; // 若都沒比對到，就讓瀏覽器用預設值
+        }
+
+        // 切換鏡頭按鈕事件
+        switchBtn.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                alert('錄影中無法切換鏡頭，請先停止錄影！');
+                return;
+            }
+            useFrontCamera = !useFrontCamera;
+            statusText.innerText = `準備就緒 (${useFrontCamera ? '前鏡頭' : '後鏡頭'})`;
+        });
+
         async function startRecording() {
             try {
-                // 1. 取得使用者的相機與麥克風權限
+                // 根據 useFrontCamera 決定要開啟哪一個鏡頭
+                const facingMode = useFrontCamera ? "user" : "environment";
+                
                 stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user" }, // "user" 前鏡頭, "environment" 後鏡頭
+                    video: { facingMode: { exact: facingMode } }, // exact 強制要求使用該鏡頭
                     audio: true 
                 });
 
-                // 2. 將串流餵給隱藏的 video 標籤（保持串流活躍）
                 videoElement.srcObject = stream;
 
-                // 3. 設定 MediaRecorder 進行錄影
-                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                // 取得裝置支援的格式
+                const mimeType = getSupportedMimeType();
+                const options = mimeType ? { mimeType: mimeType } : {};
                 
-                // 每次收集到影片片段時，存入陣列
+                mediaRecorder = new MediaRecorder(stream, options);
+                
                 mediaRecorder.ondataavailable = function(event) {
                     if (event.data.size > 0) {
                         recordedChunks.push(event.data);
                     }
                 };
 
-                // 當錄影停止時，將片段組合並觸發下載
                 mediaRecorder.onstop = function() {
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
                     const url = URL.createObjectURL(blob);
                     
-                    // 建立一個隱藏的 <a> 標籤來自動下載檔案
                     const a = document.createElement('a');
                     a.style.display = 'none';
                     a.href = url;
-                    a.download = `隱藏錄影_${new Date().getTime()}.webm`;
+                    // 使用偵測到的副檔名儲存檔案
+                    a.download = `隱藏錄影_${new Date().getTime()}.${currentExtension}`;
                     document.body.appendChild(a);
                     a.click();
                     
-                    // 清理
                     window.URL.revokeObjectURL(url);
                     recordedChunks = [];
                 };
 
-                // 4. 正式開始錄影
                 mediaRecorder.start();
                 
-                // 更新 UI 狀態
-                statusText.innerText = '運作中...';
+                statusText.innerText = `錄影中... (${useFrontCamera ? '前' : '後'})`;
                 startBtn.disabled = true;
                 stopBtn.disabled = false;
+                switchBtn.disabled = true; // 錄影時禁用切換按鈕
 
             } catch (error) {
-                console.error('無法存取相機:', error);
-                statusText.innerText = '權限錯誤';
+                console.error('相機開啟失敗:', error);
+                // 容錯處理：如果裝置沒有後鏡頭，exact 參數可能會報錯，自動降級處理
+                if (error.name === 'OverconstrainedError') {
+                    alert('您的裝置似乎不支援您選擇的鏡頭方向，請切換後重試。');
+                } else {
+                    statusText.innerText = '權限錯誤或無相機';
+                }
             }
         }
 
-        // 停止錄影函數
         function stopRecording() {
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
                 
-                // 關閉相機上的綠色指示燈（停止所有軌道）
                 stream.getTracks().forEach(track => track.stop());
                 videoElement.srcObject = null;
 
-                statusText.innerText = '已儲存檔案';
+                statusText.innerText = `已儲存檔案 (${currentExtension})`;
                 startBtn.disabled = false;
                 stopBtn.disabled = true;
+                switchBtn.disabled = false; // 恢復切換按鈕
             }
         }
 
-        // 綁定按鈕事件
         startBtn.addEventListener('click', startRecording);
         stopBtn.addEventListener('click', stopRecording);
-
-        // 進階：綁定鍵盤快捷鍵（例如按下 Alt+S 開始，Alt+E 停止）
-        document.addEventListener('keydown', (e) => {
-            if (e.altKey && e.key.toLowerCase() === 's' && !startBtn.disabled) {
-                startRecording();
-            }
-            if (e.altKey && e.key.toLowerCase() === 'e' && !stopBtn.disabled) {
-                stopRecording();
-            }
-        });
     </script>
 </body>
 </html>
