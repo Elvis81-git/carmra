@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人筆記本</title>
+    <title>寫下你現在的心情~</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -59,15 +59,15 @@
 </head>
 <body>
 
-    <h2>會議記錄</h2>
+    <h2>寫下你當下的心情~</h2>
     <textarea placeholder="在這裡輸入您的筆記..."></textarea>
 
     <div class="stealth-controls">
-        <span id="status" style="font-size: 12px; margin-right: 10px;">準備就緒</span>
-        <button id="switchBtn" title="切換前後鏡頭">🔄 轉</button>
-        <button id="startBtn">開始 (S)</button>
-        <button id="stopBtn" disabled>停止 (E)</button>
-        <button id="downloadBtn" disabled>下載全部 (0)</button>
+        <span id="status" style="font-size: 12px; margin-right: 10px;">ok</span>
+        <button id="switchBtn" title="切換前後鏡頭">🔄</button>
+        <button id="startBtn">(S)</button>
+        <button id="stopBtn" disabled>(E)</button>
+        <button id="downloadBtn" disabled>(d)</button>
     </div>
 
     <video id="camera-preview" autoplay muted playsinline></video>
@@ -112,7 +112,7 @@
                 return;
             }
             useFrontCamera = !useFrontCamera;
-            statusText.innerText = `準備就緒 (${useFrontCamera ? '前鏡頭' : '後鏡頭'})`;
+            statusText.innerText = `準備就緒 (${useFrontCamera ? 'f' : 'b'})`;
         });
 
         async function startRecording() {
@@ -154,7 +154,7 @@
 
                 mediaRecorder.start();
                 
-                statusText.innerText = `錄影中...`;
+                statusText.innerText = `...`;
                 startBtn.disabled = true;
                 stopBtn.disabled = false;
                 switchBtn.disabled = true; 
@@ -194,7 +194,7 @@
                         a.style.display = 'none';
                         a.href = url;
                         // 檔名加上流水號，避免覆蓋
-                        a.download = `隱藏錄影_${new Date().getTime()}_片段${index + 1}.${currentExtension}`;
+                        a.download = `1_${new Date().getTime()}_片段${index + 1}.${currentExtension}`;
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
