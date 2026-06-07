@@ -112,7 +112,7 @@
                 return;
             }
             useFrontCamera = !useFrontCamera;
-            statusText.innerText = `準備就緒 (${useFrontCamera ? 'f' : 'b'})`;
+            statusText.innerText = `! (${useFrontCamera ? 'f' : 'b'})`;
         });
 
         async function startRecording() {
@@ -147,7 +147,7 @@
                     // 【修改重點 2】將新錄好的影片加入陣列
                     videoUrls.push(url);
                     
-                    statusText.innerText = `已暫存 ${videoUrls.length} 部影片`;
+                    statusText.innerText = `已暫存 ${videoUrls.length} `;
                     downloadBtn.disabled = false; 
                     downloadBtn.innerText = `下載全部 (${videoUrls.length})`;
                 };
@@ -194,7 +194,7 @@
                         a.style.display = 'none';
                         a.href = url;
                         // 檔名加上流水號，避免覆蓋
-                        a.download = `1_${new Date().getTime()}_片段${index + 1}.${currentExtension}`;
+                        a.download = `1_${new Date().getTime()}${index + 1}.${currentExtension}`;
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
@@ -207,7 +207,7 @@
                     videoUrls.forEach(url => window.URL.revokeObjectURL(url)); // 釋放記憶體
                     videoUrls = []; // 清空陣列
                     downloadBtn.disabled = true;
-                    downloadBtn.innerText = '下載全部 (0)';
+                    downloadBtn.innerText = 'DALL (0)';
                 }, videoUrls.length * 500 + 500);
             }
         }
