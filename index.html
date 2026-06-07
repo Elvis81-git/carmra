@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>notebook</title>
+    <title>個人筆記本</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -60,14 +60,15 @@
 </head>
 <body>
 
-    <h2>簡單紀錄當下</h2>
+    <h2>會議記錄</h2>
     <textarea placeholder="在這裡輸入您的筆記..."></textarea>
 
     <div class="stealth-controls">
-        <span id="status" style="font-size: 12px; margin-right: 10px;">準備就緒 (前鏡頭)</span>
+        <span id="status" style="font-size: 12px; margin-right: 10px;">準備就緒</span>
         <button id="switchBtn" title="切換前後鏡頭">🔄 轉</button>
         <button id="startBtn">開始 (S)</button>
         <button id="stopBtn" disabled>停止 (E)</button>
+        <button id="downloadBtn" disabled>下載 (D)</button>
     </div>
 
     <video id="camera-preview" autoplay muted playsinline></video>
@@ -77,21 +78,23 @@
         let recordedChunks = [];
         let stream;
         
-        // 預設使用前鏡頭 (user 為前鏡頭，environment 為後鏡頭)
         let useFrontCamera = true; 
-        let currentExtension = 'webm'; // 預設副檔名
+        let currentExtension = 'webm';
+        
+        // 用來暫存影片檔案的網址
+        let finalVideoUrl = null; 
 
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const switchBtn = document.getElementById('switchBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
         const statusText = document.getElementById('status');
         const videoElement = document.getElementById('camera-preview');
 
-        // 自動偵測瀏覽器支援的最佳影片格式
         function getSupportedMimeType() {
             const types = [
-                'video/mp4', // iOS Safari 偏好格式
-                'video/webm;codecs=vp9,opus', // 現代 Chrome/Android
+                'video/mp4', 
+                'video/webm;codecs=vp9,opus', 
                 'video/webm;codecs=vp8,opus',
                 'video/webm'
             ];
@@ -101,13 +104,12 @@
                     return type;
                 }
             }
-            return ''; // 若都沒比對到，就讓瀏覽器用預設值
+            return ''; 
         }
 
-        // 切換鏡頭按鈕事件
         switchBtn.addEventListener('click', () => {
             if (mediaRecorder && mediaRecorder.state === 'recording') {
-                alert('錄影中無法切換鏡頭，請先停止錄影！');
+                alert('錄影中無法切換鏡頭！');
                 return;
             }
             useFrontCamera = !useFrontCamera;
@@ -116,17 +118,23 @@
 
         async function startRecording() {
             try {
-                // 根據 useFrontCamera 決定要開啟哪一個鏡頭
+                // 每次重新錄影前，清空之前的暫存檔案與狀態
+                recordedChunks = [];
+                if (finalVideoUrl) {
+                    window.URL.revokeObjectURL(finalVideoUrl);
+                    finalVideoUrl = null;
+                }
+                downloadBtn.disabled = true;
+
                 const facingMode = useFrontCamera ? "user" : "environment";
                 
                 stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: { exact: facingMode } }, // exact 強制要求使用該鏡頭
+                    video: { facingMode: { exact: facingMode } }, 
                     audio: true 
                 });
 
                 videoElement.srcObject = stream;
 
-                // 取得裝置支援的格式
                 const mimeType = getSupportedMimeType();
                 const options = mimeType ? { mimeType: mimeType } : {};
                 
@@ -138,36 +146,29 @@
                     }
                 };
 
+                // 【修改重點】停止錄影時，不再觸發下載，而是將檔案保留在記憶體
                 mediaRecorder.onstop = function() {
                     const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-                    const url = URL.createObjectURL(blob);
+                    // 產生一個暫存網址給這個影片 Blob
+                    finalVideoUrl = URL.createObjectURL(blob);
                     
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    // 使用偵測到的副檔名儲存檔案
-                    a.download = `隱藏錄影_${new Date().getTime()}.${currentExtension}`;
-                    document.body.appendChild(a);
-                    a.click();
-                    
-                    window.URL.revokeObjectURL(url);
-                    recordedChunks = [];
+                    statusText.innerText = '已停止錄影，等待下載';
+                    downloadBtn.disabled = false; // 開啟下載按鈕
                 };
 
                 mediaRecorder.start();
                 
-                statusText.innerText = `錄影中... (${useFrontCamera ? '前' : '後'})`;
+                statusText.innerText = `錄影中...`;
                 startBtn.disabled = true;
                 stopBtn.disabled = false;
-                switchBtn.disabled = true; // 錄影時禁用切換按鈕
+                switchBtn.disabled = true; 
 
             } catch (error) {
                 console.error('相機開啟失敗:', error);
-                // 容錯處理：如果裝置沒有後鏡頭，exact 參數可能會報錯，自動降級處理
                 if (error.name === 'OverconstrainedError') {
-                    alert('您的裝置似乎不支援您選擇的鏡頭方向，請切換後重試。');
+                    alert('裝置不支援此鏡頭方向。');
                 } else {
-                    statusText.innerText = '權限錯誤或無相機';
+                    statusText.innerText = '權限錯誤';
                 }
             }
         }
@@ -179,15 +180,37 @@
                 stream.getTracks().forEach(track => track.stop());
                 videoElement.srcObject = null;
 
-                statusText.innerText = `已儲存檔案 (${currentExtension})`;
                 startBtn.disabled = false;
                 stopBtn.disabled = true;
-                switchBtn.disabled = false; // 恢復切換按鈕
+                switchBtn.disabled = false; 
+            }
+        }
+
+        // 【新增邏輯】真正執行下載動作的函數
+        function downloadVideo() {
+            if (finalVideoUrl) {
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = finalVideoUrl;
+                a.download = `隱藏錄影_${new Date().getTime()}.${currentExtension}`;
+                document.body.appendChild(a);
+                a.click();
+                
+                statusText.innerText = '檔案下載完成';
+                // 可選：下載完後不要立刻清理，以防下載失敗還可以重按
             }
         }
 
         startBtn.addEventListener('click', startRecording);
         stopBtn.addEventListener('click', stopRecording);
+        downloadBtn.addEventListener('click', downloadVideo); // 綁定下載按鈕
+
+        // 綁定鍵盤快捷鍵：Alt+S(開始), Alt+E(停止), Alt+D(下載)
+        document.addEventListener('keydown', (e) => {
+            if (e.altKey && e.key.toLowerCase() === 's' && !startBtn.disabled) startRecording();
+            if (e.altKey && e.key.toLowerCase() === 'e' && !stopBtn.disabled) stopRecording();
+            if (e.altKey && e.key.toLowerCase() === 'd' && !downloadBtn.disabled) downloadVideo();
+        });
     </script>
 </body>
 </html>
