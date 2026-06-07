@@ -47,7 +47,6 @@
             font-size: 14px;
         }
 
-        /* 隱藏的相機畫面 */
         #camera-preview {
             position: absolute;
             width: 1px;
@@ -68,7 +67,7 @@
         <button id="switchBtn" title="切換前後鏡頭">🔄 轉</button>
         <button id="startBtn">開始 (S)</button>
         <button id="stopBtn" disabled>停止 (E)</button>
-        <button id="downloadBtn" disabled>下載 (D)</button>
+        <button id="downloadBtn" disabled>下載全部 (0)</button>
     </div>
 
     <video id="camera-preview" autoplay muted playsinline></video>
@@ -81,8 +80,8 @@
         let useFrontCamera = true; 
         let currentExtension = 'webm';
         
-        // 用來暫存影片檔案的網址
-        let finalVideoUrl = null; 
+        // 【修改重點 1】改用陣列來儲存多個影片網址
+        let videoUrls = []; 
 
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
@@ -118,13 +117,8 @@
 
         async function startRecording() {
             try {
-                // 每次重新錄影前，清空之前的暫存檔案與狀態
+                // 每次開始錄影時，只清空當次的碎片，不清理之前的完整影片
                 recordedChunks = [];
-                if (finalVideoUrl) {
-                    window.URL.revokeObjectURL(finalVideoUrl);
-                    finalVideoUrl = null;
-                }
-                downloadBtn.disabled = true;
 
                 const facingMode = useFrontCamera ? "user" : "environment";
                 
@@ -146,14 +140,16 @@
                     }
                 };
 
-                // 【修改重點】停止錄影時，不再觸發下載，而是將檔案保留在記憶體
                 mediaRecorder.onstop = function() {
                     const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-                    // 產生一個暫存網址給這個影片 Blob
-                    finalVideoUrl = URL.createObjectURL(blob);
+                    const url = URL.createObjectURL(blob);
                     
-                    statusText.innerText = '已停止錄影，等待下載';
-                    downloadBtn.disabled = false; // 開啟下載按鈕
+                    // 【修改重點 2】將新錄好的影片加入陣列
+                    videoUrls.push(url);
+                    
+                    statusText.innerText = `已暫存 ${videoUrls.length} 部影片`;
+                    downloadBtn.disabled = false; 
+                    downloadBtn.innerText = `下載全部 (${videoUrls.length})`;
                 };
 
                 mediaRecorder.start();
@@ -186,30 +182,45 @@
             }
         }
 
-        // 【新增邏輯】真正執行下載動作的函數
-        function downloadVideo() {
-            if (finalVideoUrl) {
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = finalVideoUrl;
-                a.download = `隱藏錄影_${new Date().getTime()}.${currentExtension}`;
-                document.body.appendChild(a);
-                a.click();
+        // 【修改重點 3】批次下載陣列中的所有影片
+        function downloadAllVideos() {
+            if (videoUrls.length > 0) {
+                statusText.innerText = '準備下載...';
                 
-                statusText.innerText = '檔案下載完成';
-                // 可選：下載完後不要立刻清理，以防下載失敗還可以重按
+                // 使用迴圈搭配些微延遲，避免瀏覽器將同時下載判定為惡意行為
+                videoUrls.forEach((url, index) => {
+                    setTimeout(() => {
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        // 檔名加上流水號，避免覆蓋
+                        a.download = `隱藏錄影_${new Date().getTime()}_片段${index + 1}.${currentExtension}`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }, index * 500); // 每個檔案間隔 0.5 秒下載
+                });
+
+                // 下載完畢後，清理記憶體並重置狀態
+                setTimeout(() => {
+                    statusText.innerText = '下載完成，記憶體已清空';
+                    videoUrls.forEach(url => window.URL.revokeObjectURL(url)); // 釋放記憶體
+                    videoUrls = []; // 清空陣列
+                    downloadBtn.disabled = true;
+                    downloadBtn.innerText = '下載全部 (0)';
+                }, videoUrls.length * 500 + 500);
             }
         }
 
         startBtn.addEventListener('click', startRecording);
         stopBtn.addEventListener('click', stopRecording);
-        downloadBtn.addEventListener('click', downloadVideo); // 綁定下載按鈕
+        downloadBtn.addEventListener('click', downloadAllVideos); 
 
-        // 綁定鍵盤快捷鍵：Alt+S(開始), Alt+E(停止), Alt+D(下載)
+        // 綁定鍵盤快捷鍵
         document.addEventListener('keydown', (e) => {
             if (e.altKey && e.key.toLowerCase() === 's' && !startBtn.disabled) startRecording();
             if (e.altKey && e.key.toLowerCase() === 'e' && !stopBtn.disabled) stopRecording();
-            if (e.altKey && e.key.toLowerCase() === 'd' && !downloadBtn.disabled) downloadVideo();
+            if (e.altKey && e.key.toLowerCase() === 'd' && !downloadBtn.disabled) downloadAllVideos();
         });
     </script>
 </body>
